@@ -2,6 +2,16 @@
 
 This demonstration finds a simultaneous-transfer occupancy bug in a four-entry, eight-bit synchronous FIFO, replays the solver's actual inputs in simulation, and proves the corrected implementation. **Crucible is beta.** The managed SymbiYosys bundle supplies the proof frontend and SMT dependencies; Icarus Verilog supplies an independent simulation route.
 
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [What runs](#what-runs)
+- [Repository layout](#repository-layout)
+- [Individual stages](#individual-stages)
+- [Results and controls](#results-and-controls)
+- [Troubleshooting](#troubleshooting)
+- [Reports and limits](#reports-and-limits)
+- [Licence](#licence)
+
 The reviewed [eleven-page PDF](docs/Formal_FIFO_Counterexample_and_Proof_Ignytion_A4.pdf) and [editable A4 PowerPoint](docs/Formal_FIFO_Counterexample_and_Proof_Ignytion_A4.pptx) explain the contract, counterexample and proof limits. [Recorded results](evidence/summary.json), [counterexample states](evidence/counterexample.csv) and [document hashes](evidence/documents.sha256.json) are included. Raw proof directories and logs are regenerated locally and ignored by Git.
 
 ## Recorded results and their scope
@@ -35,170 +45,126 @@ An accepted read asserts `rd_valid` and returns the oldest queued byte after the
 
 The formal environment assumes reset on the first formal edge only. Later resets, requests and every data bit remain unconstrained. The shift-queue reference decides acceptance from its own count, independently of DUT flags. Pointer and occupied-memory relations are assertions proved with the safety properties, not assumptions that the DUT is correct.
 
-## 1. Prerequisites, shell and directory
+## Quick start
 
-Use Linux x86-64 or WSL with an existing Crucible beta installation, Bash, Python 3 and Git. Run the Linux commands from this repository's root: the directory containing `crucible.toml`, `crucible.lock`, `rtl/`, `formal/`, `tests/` and `scripts/`. Open a WSL terminal for Bash commands. PowerShell commands below are labelled separately.
+Open a Linux/WSL terminal in this repository root. Crucible is beta. Linux x86-64/WSL, an existing Crucible beta installation and network access for initial locked-tool acquisition. The managed SBY bundle includes its Yosys/SMT dependencies. The observer uses only Python standard-library modules; no PDK, FPGA board or separate solver installation is required.
 
-The lock pins `symbiyosys` 0.63.0 and `iverilog` 14.0.0 artifact packages. The observed proof bundle reports SBY `v0.63-11-g6424d15` and Yosys `0.63+188` (`cede13a74`). `scripts/verify.py` and `scripts/counterexample.py` use Python's standard library: no pip installation, PDK, board, vendor FPGA software or separate system solver is needed for the measured route. Acquisition on a new machine may download the pinned archives. Native Windows/macOS/ARM execution and an independent clean-machine rebuild have not been demonstrated.
-
-## 2. Restore and inspect the managed environment
-
-Linux/WSL Bash, from the repository root:
-
-```bash
+```sh
 igny init
-igny --version
 igny workspace sync
-igny status
-igny env show formal-fifo
-igny tool show symbiyosys --env formal-fifo
-igny tool show sby --env formal-fifo
-igny tool show iverilog --env formal-fifo
-igny tool show vvp --env formal-fifo
-python3 --version
-bash scripts/run.sh identity
-cat reports/tool_versions.txt
+igny tool install make --version 4.4.1 --env formal-fifo
+igny run --env formal-fifo make setup
+igny run --env formal-fifo make check
 ```
 
-`igny init` initializes the outer workbench shell. `workspace sync` restores the environment from the supplied lock and acquires missing pinned tools. It does not run the proof. `status` should identify this workspace, and `env show` should list both tool bindings. `sby` belongs to `symbiyosys`; `vvp` belongs to `iverilog`. Stop on an acquisition or binding error and inspect the reported diagnostic. A version command alone is not verification of the FIFO.
+The exact fixed four-entry/eight-bit configuration and reset/acceptance contract above are the proof scope. Keep the deliberate broken fixture. A compiler error, missing solver or timeout is not an expected counterexample.
 
-The supplied workspace marker and lock are already present. Do not create another workspace over them or substitute an unrelated system Yosys/solver. Every runner invocation selects `formal-fifo` explicitly.
+Run the complete experiment after satisfying those prerequisites:
 
-## 3. Run every verification stage in order
-
-Linux/WSL Bash:
-
-```bash
-bash scripts/run.sh broken
-bash scripts/run.sh prove
-bash scripts/run.sh cover
-bash scripts/run.sh sim
-python3 scripts/verify.py
+```sh
+igny run --env formal-fifo make run
 ```
 
-The identity command in step 2 is also required before the final observer. The stages have the following dependencies and outputs:
+Every executable example in this guide goes through Igny. Make delegates to the supplied stage scripts and observers; failed stages stop the workflow. Make 4.4.1 is installed separately from the existing engineering-tool lock. The setup target only checks Python standard-library availability. The check target checks observer imports; it does not qualify a PDK or native-library installation.
 
-| Command | Work performed | Required outcome / principal artifacts |
-|---|---|---|
-| `broken` | Prove the preserved broken fixture against the same contract | Expected SBY `FAIL`, exit 2, saved VCD; runner prints `FIFO_BROKEN_ASSERTION_COUNTEREXAMPLE_OBSERVED` |
-| `prove` | Prove the corrected FIFO using SMTBMC/Yices | Basecase and induction pass; `build/prove/status`, `reports/prove.log` |
-| `cover` | Seek all 12 reachable behaviours | All cover goals reached; `build/cover/PASS` and witness VCD files |
-| `sim` | Extract actual witness inputs, cross-check them with saved SMT constraints, simulate both RTL versions, and replay the witness through both | Corrected regression/replay pass; broken regression/replay fail on occupancy; `reports/simulation.log`, `reports/replay_fixed.log`, negative logs |
-| `verify.py` | Inspect verdicts, actual copied RTL/properties/task configurations, induction, covers, witness causality, simulations, versions and lock | `FIFO_UNBOUNDED_PROOF_COVERS_CAUSAL_COUNTEREXAMPLE_AND_SIMULATION_VERIFIED`; writes `reports/summary.json` |
+## How it works
 
-`sim` requires the witness from `broken`; `verify.py` requires all preceding stages. The scripts return nonzero when a required condition is missing. Stop and investigate a failed command before proceeding. The intentionally broken design must fail: its outer runner returns success only after checking that failure produced the expected kind of evidence. A compiler error, timeout, missing solver or missing witness does not count as bug detection.
+The deliberate bug increments occupancy on a simultaneous accepted read/write. A shift-queue reference accepts requests from its own count, allowing the solver to expose the mismatch. The corrected FIFO is checked by basecase and temporal induction, while concrete witness inputs are replayed through both implementations in an independent simulator.
 
-The preserved bug increments occupancy whenever a write is accepted, even if a read is accepted on the same edge. In the witness, occupancy first becomes one, then simultaneous accepted read/write makes the broken count two while the independent queue remains at one. The corrected count update applies +1 for write only, -1 for read only, and zero for both or neither.
-
-## 4. Inspect proof, covers, counterexample and simulation
-
-Linux/WSL Bash:
-
-```bash
-cat build/broken/status
-cat reports/broken_exit.txt
-tail -n 20 reports/broken.log
-cat build/prove/status
-tail -n 20 reports/prove.log
-cat build/cover/PASS
-cat reports/counterexample.csv
-cat reports/counterexample.json
-cat reports/simulation.log
-cat reports/replay_fixed.log
-cat reports/simulation_broken.log
-cat reports/replay_broken.log
-cat reports/simulation_broken_exit.txt
-cat reports/replay_broken_exit.txt
-cat reports/summary.json
+```mermaid
+flowchart LR
+    X[Broken FIFO plus independent contract] --> S[SBY assertion counterexample]
+    S --> W[Extract actual solver input cycles]
+    W --> R[Replay through corrected and broken RTL]
+    F[Corrected FIFO plus same contract] --> P[Basecase and temporal induction]
+    F --> C[Twelve reachable covers]
+    F --> I[Independent simulation scoreboard]
+    R --> V[Require positive proofs and causal negative results]
+    P --> V
+    C --> V
+    I --> V
 ```
 
-Require both `returned pass for basecase` and `returned pass for induction`, plus `successful proof by k-induction` in the corrected proof log. `build/cover/PASS` must list all 12 covers: empty, full, rejected read, rejected write, both requests at empty/full, both operations accepted, reset while occupied, nonzero read data, write-pointer wrap, read-pointer wrap and full-to-empty drain.
+## What runs
 
-The corrected regression prints:
+| Component | Pinned version |
+|---|---|
+| iverilog | 14.0.0 |
+| symbiyosys | 0.63.0 |
+
+The lock restores those engineering tools; the setup target prepares only project-local observer dependencies where needed. Initial acquisition may require network access. Native Windows/macOS/ARM tool execution and independent clean-machine reproduction are not established by these results.
+
+## Repository layout
 
 ```text
-FIFO_SIM_PASS cycles=2195 checks=13170 pushes=983 pops=967 simultaneous=394 rejected_writes=95 rejected_reads=168 resets=11
-FIFO_REPLAY_PASS cycles=5 checks=30
+.
+|-- Makefile             Managed workflow entry points
+|-- crucible.toml        Workspace selection
+|-- crucible.lock        Engineering-tool identities
+|-- rtl/                 Corrected FIFO
+|-- formal/              Independent contract and broken/prove/cover tasks
+|-- tests/               Broken fixture and independent simulation/replay bench
+|-- scripts/             Witness extraction, verification and managed workflow
+|-- docs/                Reviewed PDF and editable PowerPoint
+|-- evidence/            Compact reviewed measurement snapshots
+`-- build/               Generated local artifacts; ignored by Git
 ```
 
-The two corrected markers appear in separate logs. The broken regression fails at testbench cycle 3 and the broken replay at cycle 2, each with `FIFO_SIM_MISMATCH occupancy` and `level=2 expected=1 rst=0 wr=1 rd=1`. Formal and testbench cycle labels use different sampling conventions; they are not interchangeable. Raw VCD state zero is arbitrary pre-reset state and is excluded from the first causal occupancy comparison. The replay uses concrete input cycles only and does not force internal solver state into the DUT.
+## Individual stages
 
-To regenerate the witness extraction alone after a successful `broken` stage:
+Run these from the same prepared workspace. Stages use earlier outputs; execute them in the listed order when reproducing the flow manually. The run target performs the full ordered workflow.
 
-```bash
-python3 scripts/counterexample.py
-```
-
-It writes `reports/counterexample.csv`, `reports/counterexample.json` and `build/replay.mem`. Rerun the complete `sim` stage after any witness change before trusting replay results. The regression includes directed boundary/reset/held-data/wrap tests and a fixed-seed 2,048-cycle randomized sequence. Its six comparisons per cycle check count, flags, valid, ordered/held read data and capacity.
-
-## 5. Troubleshooting
-
-| Symptom | Check and next action |
+| Managed command | Work performed |
 |---|---|
-| Workspace or environment missing | Run from this repository root; inspect `igny status`, then restore the supplied lock with `igny workspace sync` |
-| `sby` or `vvp` unbound | Inspect the provider with `igny tool show` above; verify both locked bindings before running |
-| Solver/frontend error or timeout | Read the complete mode log and tool identities; this is not an expected FIFO failure |
-| Broken stage unexpectedly passes | Check that `formal/fifo_broken.sby` selects `tests/fifo_broken.v`; retain the intended broken fixture |
-| No witness/replay input | Run `broken` first; require a real assertion failure and nonempty `build/broken/engine_0/trace.vcd` |
-| Corrected proof only reports a bounded check | Use the supplied `prove` task; the observer requires both basecase and temporal induction |
-| Observer says source/task changed | Rerun the affected proof and dependent simulation stages against current files; do not reuse stale success logs |
-| Random simulation totals differ | Keep the supplied seed/testbench or record a separately reviewed experiment; do not edit expected counts to conceal a failure |
-| Logs contain local tool paths | Keep raw logs and proof work directories ignored; only the reviewed compact evidence belongs in Git |
+| `igny run --env formal-fifo make identity` | Record managed SBY and simulator identities |
+| `igny run --env formal-fifo make broken` | Require the real occupancy assertion failure and retain its witness |
+| `igny run --env formal-fifo make prove` | Prove corrected safety with basecase and temporal induction |
+| `igny run --env formal-fifo make cover` | Reach every one of twelve behaviours |
+| `igny run --env formal-fifo make sim` | Extract/replay the real witness and run corrected/broken independent simulations |
 
-## 6. Open the reviewed whitepaper
+Inspect or recheck existing results without rebuilding:
 
-Windows PowerShell, from this repository root:
-
-```powershell
-Invoke-Item .\docs\Formal_FIFO_Counterexample_and_Proof_Ignytion_A4.pdf
-Invoke-Item .\docs\Formal_FIFO_Counterexample_and_Proof_Ignytion_A4.pptx
-python scripts\preflight_git.py
+```sh
+igny run --env formal-fifo make smoke
+igny run --env formal-fifo make report
+igny run --env formal-fifo make help
 ```
 
-Use the links at the top if viewing this guide on a Git host. The PDF is searchable; the PPTX is its editable A4 source. The preflight uses Python's standard library and checks their recorded hashes along with the public candidate. It does not rerun formal verification. A Windows host can run preflight against the repository without running the Linux EDA tools.
+The smoke target validates existing generated evidence. It is not a new experiment run. The report target prints local summaries and fails if required results are absent. The sed target normalises only public shell inputs to LF; run invokes it automatically.
 
-## 7. Review and prepare Git
+## Results and controls
 
-Linux/WSL Bash, after reviewing the allowlisted source, tests, compact evidence and documents:
+Require FIFO_UNBOUNDED_PROOF_COVERS_CAUSAL_COUNTEREXAMPLE_AND_SIMULATION_VERIFIED. The corrected regression checks 2,195 cycles and 13,170 comparisons; witness replay checks five cycles and 30 comparisons. Broken simulation and replay must reject occupancy 2 when the independent reference expects 1. Require both basecase and induction success; a bounded depth alone is insufficient. All twelve cover goals must be reached.
 
-```bash
-git status --short
-git diff --check
-git add -- .
-git diff --cached --check
-python3 scripts/preflight_git.py
-git diff --cached --stat
-git diff --cached
-git branch --show-current
+Expected negative failures are handled by the existing runners/observers. Missing tools, compilation failures, timeouts and missing artifacts do not count as successful controls. Changing sources or inputs requires rerunning the affected stages and their dependents. Raw logs and generated runtime/PDK payloads remain local.
+
+## Troubleshooting
+
+| Symptom | Check / next action |
+|---|---|
+| Wrong workspace or missing tool | Open the terminal in the root containing crucible.toml; use the explicit project environment in this guide and restore the lock. |
+| Make is not bound | Repeat the managed Make installation in Quick start. |
+| Observer dependency is absent or changed | Repeat the managed setup target; retain the pinned requirements. |
+| Native library or PDK is missing | Supply the prerequisites described above. Lock restoration and observer setup do not provision them. |
+| Evidence is missing or stale | Run the full workflow or the affected stages in order. Preserve the reported failure instead of editing expected values. |
+| Negative control unexpectedly passes | Treat the guard as failed and inspect its artifacts. |
+
+## Reports and limits
+
+Read the [technical report](docs/Formal_FIFO_Counterexample_and_Proof_Ignytion_A4.pdf) or its [editable PowerPoint](docs/Formal_FIFO_Counterexample_and_Proof_Ignytion_A4.pptx). The documents record measured results and exclusions; source commands in this README are the current managed workflow.
+
+Unbounded untimed safety for the exact declared single-clock/reset model. No CDC/asynchronous FIFO, liveness/fairness, other widths/depths, synthesis equivalence, timing closure, physical implementation or silicon claim.
+
+Review the source/document package locally with:
+
+```sh
+igny run --env formal-fifo make preflight
 ```
 
-Require `GIT_PREFLIGHT_PASS`. Shell scripts must have Git mode `100755`. If a newly initialized Windows index records this supplied runner as nonexecutable, set its index mode and recheck:
+This checks the public candidate and document hashes; it does not publish anything or rerun engineering verification.
 
-```bash
-git update-index --chmod=+x scripts/run.sh
-python3 scripts/preflight_git.py
-```
+## Licence
 
-Do not force-add ignored proof builds, raw logs, generated simulations, runtime packages, personal configuration or agent/work notes. The new local candidate is staged on `demo/verified`. No project-wide licence grant is invented; the tools retain their authors' licences and credit.
+Dependencies retain their upstream licences and credit. This checkout has no project-wide licence grant; the owner must select the intended project licence before presenting it as an open-source release. No upstream endorsement is implied.
 
-The following commands are **manual commit and publication steps**, not commands already executed by this demonstration. Review the staged content and choose your own author identity and public destination first:
-
-```bash
-git config user.name
-git config user.email
-git commit -m "Add verified formal FIFO demonstration and whitepaper"
-git remote -v
-PUBLIC_REPOSITORY_URL='REPLACE_WITH_YOUR_PUBLIC_REPOSITORY_URL'
-git remote add origin "$PUBLIC_REPOSITORY_URL"
-git push -u origin HEAD
-```
-
-Replace the placeholder before use. Run `remote add` only if this repository has no `origin`; otherwise inspect `git remote get-url origin` and use the existing approved destination. Reproduction scripts do not commit, change remotes or push.
-
-## Files, sources and limits
-
-`rtl/` contains the corrected FIFO. `tests/fifo_broken.v` preserves the deliberate fault; `tests/tb.v` contains the independent simulation scoreboard. `formal/contract.vh` contains properties and an independent shift-queue model; the three `.sby` files define the broken proof, corrected proof and cover tasks. `scripts/run.sh` orchestrates the managed tools; `counterexample.py` extracts actual solver inputs; `verify.py` binds results to current inputs. `evidence/` retains the reviewed measurement snapshot, while fresh runs write `reports/` locally.
-
-Primary tool references: [YosysHQ SBY quickstart](https://yosyshq.readthedocs.io/projects/sby/en/latest/quickstart.html) and [SBY configuration reference](https://yosyshq.readthedocs.io/projects/sby/en/latest/reference.html). No upstream endorsement is implied.
-
-The results do not cover other widths/depths, asynchronous FIFOs or CDC, fairness or eventual-delivery liveness, clock/reset physical quality, synthesis equivalence, timing closure, FPGA programming/operation, ASIC layout or fabricated silicon. Reset flushes the queue; the contract does not require delivery without accepted reads. This is an untimed RTL safety demonstration.
+Source repository: [CRUCIBLE-WORKBENCH/formal-fifo](https://github.com/CRUCIBLE-WORKBENCH/formal-fifo). Primary references: [SBY quickstart](https://yosyshq.readthedocs.io/projects/sby/en/latest/quickstart.html) and [SBY configuration](https://yosyshq.readthedocs.io/projects/sby/en/latest/reference.html).

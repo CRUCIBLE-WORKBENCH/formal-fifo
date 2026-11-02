@@ -24,7 +24,7 @@ for item in filter(None, entries):
     indexed[path] = (mode, digest)
 paths = sorted(set(indexed) | set(filter(None, git('ls-files', '--others', '--exclude-standard', '-z').split('\0'))))
 assert paths, 'No candidate files'
-allowed_roots = {'.gitignore', '.gitattributes', 'README.md', 'crucible.toml', 'crucible.lock', 'requirements.txt', 'docs', 'evidence', 'config', 'scripts', 'layout', 'spice', 'rtl', 'tests', 'src', 'reference', 'formal'}
+allowed_roots = {'Makefile', '.gitignore', '.gitattributes', 'README.md', 'crucible.toml', 'crucible.lock', 'requirements.txt', 'docs', 'evidence', 'config', 'scripts', 'layout', 'spice', 'rtl', 'tests', 'src', 'reference', 'formal'}
 for path in paths:
     p = ROOT / path
     assert p.is_file() and not p.is_symlink(), 'Missing or linked candidate: ' + path

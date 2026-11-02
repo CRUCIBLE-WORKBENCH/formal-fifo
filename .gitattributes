@@ -11,3 +11,5 @@
 *.md text eol=lf
 *.pdf binary
 *.pptx binary
+
+Makefile text eol=lf
