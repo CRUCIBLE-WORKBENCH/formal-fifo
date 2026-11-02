@@ -1,0 +1,83 @@
+{
+  "measurement_date": "2026-11-01",
+  "configuration": {
+    "entries": 4,
+    "data_bits": 8,
+    "reset": "synchronous active high; first proof edge must reset; later resets unconstrained"
+  },
+  "proof": "PASS: basecase and temporal induction; unbounded safety under stated single-clock/reset model",
+  "engine": "SymbiYosys smtbmc yices",
+  "sby_version": "v0.63-11-g6424d15",
+  "yosys_version": "0.63+188 (git sha1 cede13a74, clang++ 18.1.8 -fPIC -O3)",
+  "covers": {
+    "c_empty": 2,
+    "c_empty_both": 2,
+    "c_read_wrap": 8,
+    "c_full_to_empty": 10,
+    "c_empty_read_rejected": 2,
+    "c_simultaneous": 3,
+    "c_reset_active": 3,
+    "c_nonzero_data": 4,
+    "c_full": 6,
+    "c_full_both": 6,
+    "c_full_write_rejected": 6,
+    "c_wrap": 7
+  },
+  "cover_count": 12,
+  "broken_assertion": "a_level fails at formal step 4",
+  "counterexample": {
+    "witness_sha256": "3e9d93795c8418618f9843d397d908c9d39c0ff997ef329564f5bbec9512a1d5",
+    "source_sha256": "e6d7d7208d326ebc2736328ea1ef6cd52c4244609a6a5548efcd5e117671c44f",
+    "first_mismatch_step": 3,
+    "preceding_inputs": {
+      "step": 2,
+      "rst": 0,
+      "wr_en": 1,
+      "rd_en": 1,
+      "wr_data": 150,
+      "level": 1,
+      "f_count": 1,
+      "take_write": 1,
+      "take_read": 1
+    },
+    "mismatched_state": {
+      "step": 3,
+      "rst": 0,
+      "wr_en": 0,
+      "rd_en": 0,
+      "wr_data": 0,
+      "level": 2,
+      "f_count": 1,
+      "take_write": 0,
+      "take_read": 0
+    },
+    "replay_steps": 5,
+    "scope": "Step zero is unconstrained pre-reset state. Compare occupancy only after the required initial reset edge."
+  },
+  "simulation": {
+    "cycles": 2195,
+    "checks": 13170,
+    "pushes": 983,
+    "pops": 967,
+    "simultaneous": 394,
+    "rejected_writes": 95,
+    "rejected_reads": 168,
+    "resets": 11
+  },
+  "replay": {
+    "cycles": 5,
+    "checks": 30,
+    "corrected": "PASS",
+    "broken": "occupancy mismatch, 2 versus expected 1; exit 1"
+  },
+  "scope": "Exact fixed four-entry eight-bit untimed RTL safety. No CDC, liveness/fairness, timing, physical implementation or hardware claim.",
+  "files_sha256": {
+    "rtl/fifo.v": "5ae0367462625b5ddb8df57ef73211ee30f61170c3a2d1bf9f1e1dbc606d4c23",
+    "tests/fifo_broken.v": "e6d7d7208d326ebc2736328ea1ef6cd52c4244609a6a5548efcd5e117671c44f",
+    "tests/tb.v": "58b6f7e20031c5f89efa08348b007d51b36ceb2759ccc413093379399e5391de",
+    "formal/contract.vh": "edcfdb0ff5f54b11b38d0aa2a026677bf42ecdd052a1718119686b810da51ec0",
+    "formal/fifo_prove.sby": "981ee27d4a0181678b16ce2be8969cb9dbbb7f5ed5976271edf502bddc84239d",
+    "formal/fifo_cover.sby": "9ca0baddd04cfba71a4f55fffa23f4ae998ec322066e77cfd93fd2165bf32fd3",
+    "formal/fifo_broken.sby": "d789392ede2c0fa79441d549ab2c79d74cf1e352fd25e8d18af3d91697469077"
+  }
+}

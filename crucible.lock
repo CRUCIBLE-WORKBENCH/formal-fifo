@@ -1,0 +1,30 @@
+{
+  "active_environment": "formal-fifo",
+  "environments": [
+    {
+      "name": "formal-fifo",
+      "stack": "default",
+      "tools": [
+        {
+          "artifact_id": "igny_linux-x64_iverilog_14.0.0.0.tar.gz",
+          "checksum": "sha256:ea8c88407f03105163c70d03bba56a68b527188c7cf9437aa009048e74182216",
+          "enabled": true,
+          "name": "iverilog",
+          "platform": "linux-x86_64",
+          "source": "artifact",
+          "version": "14.0.0"
+        },
+        {
+          "artifact_id": "igny_linux-x64_symbiyosys_0.63.0.0.tar.gz",
+          "checksum": "sha256:53d9d33a64e0cd3a0e921541761e1951580081fabb72cee7e68e40fe75ab62af",
+          "enabled": true,
+          "name": "symbiyosys",
+          "platform": "linux-x86_64",
+          "source": "artifact",
+          "version": "0.63.0"
+        }
+      ]
+    }
+  ],
+  "schema_version": 1
+}

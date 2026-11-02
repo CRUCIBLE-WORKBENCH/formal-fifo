@@ -1,0 +1,15 @@
+[options]
+mode prove
+depth 16
+timeout 120
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal -sv fifo.v
+prep -top fifo
+
+[files]
+rtl/fifo.v
+formal/contract.vh

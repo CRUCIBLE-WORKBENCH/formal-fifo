@@ -1,0 +1,29 @@
+{
+  "witness_sha256": "3e9d93795c8418618f9843d397d908c9d39c0ff997ef329564f5bbec9512a1d5",
+  "source_sha256": "e6d7d7208d326ebc2736328ea1ef6cd52c4244609a6a5548efcd5e117671c44f",
+  "first_mismatch_step": 3,
+  "preceding_inputs": {
+    "step": 2,
+    "rst": 0,
+    "wr_en": 1,
+    "rd_en": 1,
+    "wr_data": 150,
+    "level": 1,
+    "f_count": 1,
+    "take_write": 1,
+    "take_read": 1
+  },
+  "mismatched_state": {
+    "step": 3,
+    "rst": 0,
+    "wr_en": 0,
+    "rd_en": 0,
+    "wr_data": 0,
+    "level": 2,
+    "f_count": 1,
+    "take_write": 0,
+    "take_read": 0
+  },
+  "replay_steps": 5,
+  "scope": "Step zero is unconstrained pre-reset state. Compare occupancy only after the required initial reset edge."
+}

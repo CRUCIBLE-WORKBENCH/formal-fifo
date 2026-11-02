@@ -1,0 +1,10 @@
+[workspace]
+name = "formal-fifo"
+id = "formal-fifo-ca3c9d1e"
+environment = "formal-fifo"
+environments = [ "formal-fifo",]
+
+[workspace.metadata]
+managed = false
+created_at = "2026-10-31T20:42:34.401252+00:00"
+created_by = "crucible-core"
